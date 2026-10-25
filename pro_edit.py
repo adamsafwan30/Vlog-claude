@@ -74,7 +74,7 @@ SHOTS = [
     ("P41", 2, None, 1, "punch", CUT, 0),
     ("P42", 2, None, 1, "in", CUT, 0),
     ("V3", 4, 0.40, 1.5, "none", CUT, 0),
-    ("V4", 2, 0.50, 1, "none", ("hblur", 0.25), 0),
+    ("V4", 2, 0.00, 0.5, "none", ("hblur", 0.25), 0),  # klip 0.85s, slow-mo supaya cukup
     ("V5", 4, 0.40, 1, "in", CUT, 0),
     ("V6", 4, 0.65, 1, "none", CUT, 0),
     ("P43", 2, None, 1, "punch", CUT, 0),
@@ -160,7 +160,9 @@ def render_shot(shot, src, frames, out):
     ref, _, frac, speed, motion, _, _ = shot
     secs = frames / FPS
     cover = "scale=2400:1350:force_original_aspect_ratio=increase,crop=2400:1350,setsar=1"
-    tail = f"{zoompan(motion, frames)},{GRADE},format=yuv420p"
+    # tpad: klip sumber yang terlalu pendek dipanjangkan dengan frame terakhir supaya
+    # bilangan frame sentiasa tepat (rantai xfade terputus kalau klip kurang frame)
+    tail = f"tpad=stop_mode=clone:stop_duration=3,{zoompan(motion, frames)},{GRADE},format=yuv420p"
     if ref[0] == "P":
         cmd = ["ffmpeg", "-y", "-loop", "1", "-framerate", str(FPS), "-t", f"{secs + 0.5:.3f}",
                "-i", str(src), "-vf", f"{cover},{tail}"]
@@ -172,6 +174,11 @@ def render_shot(shot, src, frames, out):
     cmd += ["-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
             "-r", str(FPS), str(out)]
     run(cmd)
+    got = int(subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0",
+                              "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(out)],
+                             capture_output=True, text=True, check=True).stdout)
+    if got != frames:
+        raise RuntimeError(f"{ref}: dapat {got} frame, perlu {frames}")
     return intermediate_start(shot, src, frames)
 
 
@@ -345,7 +352,7 @@ def main():
                 mix.append(f"[n{i}]")
                 nat_idx += 1
         fc.append(f"{''.join(mix)}amix=inputs={len(mix)}:normalize=0:duration=first,"
-                  f"alimiter=limit=0.89,aresample=48000[aout]")
+                  f"alimiter=limit=0.79:level=disabled,aresample=48000[aout]")
 
         script = tmp / "graph.txt"
         script.write_text(";\n".join(fc))
