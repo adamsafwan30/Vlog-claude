@@ -149,6 +149,13 @@ def zoompan(motion, frames):
     return f"zoompan=z='{z}':{xy}:d=1:s={W}x{H}:fps={FPS}"
 
 
+def intermediate_start(shot, src, frames):
+    if shot[0][0] == "P":
+        return 0.0
+    src_len = frames / FPS * shot[3]
+    return max(0.0, min(shot[2] * duration(src), duration(src) - src_len - 0.1))
+
+
 def render_shot(shot, src, frames, out):
     ref, _, frac, speed, motion, _, _ = shot
     secs = frames / FPS
@@ -159,13 +166,13 @@ def render_shot(shot, src, frames, out):
                "-i", str(src), "-vf", f"{cover},{tail}"]
     else:
         src_len = secs * speed
-        start = max(0.0, min(frac * duration(src), duration(src) - src_len - 0.1))
+        start = intermediate_start(shot, src, frames)
         cmd = ["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{src_len + 0.3:.3f}", "-i", str(src),
                "-vf", f"setpts=(PTS-STARTPTS)/{speed},fps={FPS},{cover},{tail}"]
     cmd += ["-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
             "-r", str(FPS), str(out)]
     run(cmd)
-    return start if ref[0] == "V" else 0.0
+    return intermediate_start(shot, src, frames)
 
 
 def text(tmp, name, s, font, size, x, y, t0, t1, fade=0.6, rise=0, colour="white"):
@@ -188,6 +195,7 @@ def main():
     p.add_argument("footage", type=Path)
     p.add_argument("-o", "--output", type=Path, default=Path("east_coast_diaries.mp4"))
     p.add_argument("--workers", type=int, default=3)
+    p.add_argument("--cache", type=Path, help="folder simpan klip perantaraan (render semula lebih laju)")
     args = p.parse_args()
     videos = sorted((args.footage / "videos").glob("*.mp4"))
     photos = sorted((args.footage / "photos").glob("*.jpg"))
@@ -212,14 +220,23 @@ def main():
         frames = [e - s for s, e in zip(starts, ends)]
         print(f"Drop 1 @ {bt(DROPS[0]):.2f}s, drop 2 @ {bt(DROPS[1]):.2f}s, {len(SHOTS)} shot")
 
+        cache = args.cache or tmp
+        cache.mkdir(parents=True, exist_ok=True)
+
         def job(i):
             shot = SHOTS[i]
             src = (videos if shot[0][0] == "V" else photos)[int(shot[0][1:]) - 1]
-            out = tmp / f"s{i:03d}.mp4"
-            start = render_shot(shot, src, frames[i], out)
+            out = cache / f"s{i:03d}_{shot[0]}_{frames[i]}_{shot[2]}_{shot[3]}_{shot[4]}.mp4"
+            shot_files[i] = out
+            if out.exists():
+                return src, intermediate_start(shot, src, frames[i])
+            part = out.with_suffix(".part.mp4")
+            start = render_shot(shot, src, frames[i], part)
+            part.rename(out)
             print(f"  [{i + 1}/{len(SHOTS)}] {shot[0]:>4} {frames[i] / FPS:5.2f}s {shot[4]}")
             return src, start
 
+        shot_files = {}
         with ThreadPoolExecutor(args.workers) as pool:
             sources = list(pool.map(job, range(len(SHOTS))))
 
@@ -236,14 +253,15 @@ def main():
         # --- Video: rantai xfade ---
         inputs, fc = [], []
         for i in range(len(SHOTS)):
-            inputs += ["-i", str(tmp / f"s{i:03d}.mp4")]
+            inputs += ["-i", str(shot_files[i])]
             fc.append(f"[{i}:v]settb=AVTB,setpts=PTS-STARTPTS[v{i}]")
         last = "v0"
         for i in range(1, len(SHOTS)):
             kind = SHOTS[i][5][0]
             kind = "fade" if kind == "cut" else kind
-            fc.append(f"[{last}][v{i}]xfade=transition={kind}:duration={trans[i] / FPS:.4f}"
-                      f":offset={starts[i] / FPS:.4f}[x{i}]")
+            # offset setengah frame lebih awal supaya pembundaran tak melepasi frame sebenar
+            fc.append(f"[{last}][v{i}]xfade=transition={kind}:duration={trans[i] / FPS:.6f}"
+                      f":offset={(starts[i] - 0.5) / FPS:.6f}[x{i}]")
             last = f"x{i}"
 
         d1, outro = bt(DROPS[0]), bt(OUTRO_BEAT)
