@@ -9,12 +9,14 @@ Penggunaan:
 - Gambar dipaparkan dengan kesan zoom perlahan.
 - Jika fail audio (mp3/m4a/wav) ada dalam folder atau diberi melalui --music,
   ia dijadikan muzik latar dan audio asal video diperlahankan.
+- Gred warna "vlog" yang hangat, tajuk pembuka dan teks penutup (--no-text untuk buang).
 """
 import argparse
 import json
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".webm", ".3gp"}
@@ -22,6 +24,9 @@ IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 AUDIO_EXT = {".mp3", ".m4a", ".wav", ".aac", ".ogg"}
 FPS = 30
 FADE = 0.4
+BULAN = ["Januari", "Februari", "Mac", "April", "Mei", "Jun", "Julai",
+         "Ogos", "September", "Oktober", "November", "Disember"]
+GRADE = "eq=contrast=1.06:saturation=1.18:gamma=1.02,colorbalance=rs=0.03:bs=-0.03,vignette=PI/5"
 
 
 def run(cmd):
@@ -39,14 +44,20 @@ def probe(path):
     return duration, has_audio
 
 
+def fill(w, h):
+    """Muatkan ke w x h dengan latar kabur (bukan jalur hitam) bila nisbah aspek berbeza."""
+    return (f"split[a][b];[a]scale={w // 4}:{h // 4}:force_original_aspect_ratio=increase,"
+            f"crop={w // 4}:{h // 4},boxblur=10:2,scale={w}:{h},eq=brightness=-0.08[bg];"
+            f"[b]scale={w}:{h}:force_original_aspect_ratio=decrease[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
+
+
 def render_clip(src, kind, length, w, h, out):
     fade = f"fade=t=in:st=0:d={FADE},fade=t=out:st={length - FADE:.3f}:d={FADE}"
-    scale = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-             f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
+    scale = fill(w, h)
     if kind == "image":
         frames = int(length * FPS)
-        vf = (f"scale={w * 2}:{h * 2}:force_original_aspect_ratio=decrease,"
-              f"pad={w * 2}:{h * 2}:(ow-iw)/2:(oh-ih)/2:color=black,"
+        vf = (f"{fill(w * 2, h * 2)},"
               f"zoompan=z='min(zoom+0.0008,1.15)':d={frames}:s={w}x{h}:fps={FPS}"
               f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)',setsar=1,{fade}")
         run(["ffmpeg", "-y", "-loop", "1", "-i", str(src),
@@ -65,6 +76,27 @@ def render_clip(src, kind, length, w, h, out):
             "-ac", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
             "-t", f"{length:.3f}", str(out)]
     run(cmd)
+
+
+def find_font(bold=True):
+    pattern = "Inter:style=Bold" if bold else "Inter:style=Regular"
+    try:
+        out = subprocess.run(["fc-match", "-f", "%{file}", pattern],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        return out or None
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def text_layer(tmp, name, text, size, y, start, end, font):
+    """drawtext dengan fade masuk/keluar; teks ditulis ke fail supaya tak perlu escape."""
+    textfile = tmp / f"{name}.txt"
+    textfile.write_text(text)
+    alpha = (f"if(lt(t,{start}),0,if(lt(t,{start + 0.8}),(t-{start})/0.8,"
+             f"if(lt(t,{end - 0.8}),1,if(lt(t,{end}),({end}-t)/0.8,0))))")
+    font_opt = f"fontfile={font}:" if font else ""
+    return (f"drawtext={font_opt}textfile={textfile}:fontsize={size}:fontcolor=white"
+            f":shadowcolor=black@0.6:shadowx=3:shadowy=3:x=(w-text_w)/2:y={y}:alpha='{alpha}'")
 
 
 def allocate(media, total):
@@ -96,6 +128,10 @@ def main():
     p.add_argument("-d", "--duration", type=float, default=120.0, help="durasi saat (default 120)")
     p.add_argument("--vertical", action="store_true", help="format 1080x1920 (Reels/TikTok)")
     p.add_argument("--music", type=Path, help="fail muzik latar")
+    p.add_argument("--title", default="Vlog Saya", help="tajuk pembuka")
+    p.add_argument("--subtitle", help="sari kata tajuk (default: tarikh hari ini)")
+    p.add_argument("--outro", default="Terima kasih kerana menonton!", help="teks penutup")
+    p.add_argument("--no-text", action="store_true", help="tanpa tajuk/penutup")
     args = p.parse_args()
 
     out_path = args.output.resolve()
@@ -127,18 +163,31 @@ def main():
         run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listfile), "-c", "copy", str(joined)])
 
         d = args.duration
+        vf = GRADE
+        if not args.no_text:
+            today = date.today()
+            subtitle = args.subtitle or f"{today.day} {BULAN[today.month - 1]} {today.year}"
+            big, small = (h // 12, h // 30) if not args.vertical else (w // 14, w // 28)
+            bold, regular = find_font(True), find_font(False)
+            vf += "," + ",".join([
+                text_layer(tmp, "title", args.title, big, f"h*0.42-{big}/2", 0.5, 5.0, bold),
+                text_layer(tmp, "subtitle", subtitle, small, f"h*0.42+{big}*0.7", 1.0, 5.0, regular),
+                text_layer(tmp, "outro", args.outro, small * 3 // 2, "h*0.45", d - 5, d - 0.3, bold),
+            ])
+        cmd = ["ffmpeg", "-y", "-i", str(joined)]
         if music:
             print(f"Muzik latar: {music.name}")
-            af = (f"[0:a]volume=0.35[orig];"
+            cmd += ["-stream_loop", "-1", "-i", str(music)]
+            fc = (f"[0:v]{vf}[v];[0:a]volume=0.35[orig];"
                   f"[1:a]volume=0.8,afade=t=in:st=0:d=2,afade=t=out:st={d - 3}:d=3[bg];"
                   f"[orig][bg]amix=inputs=2:duration=first:normalize=0[a]")
-            run(["ffmpeg", "-y", "-i", str(joined), "-stream_loop", "-1", "-i", str(music),
-                 "-filter_complex", af, "-map", "0:v", "-map", "[a]", "-c:v", "copy",
-                 "-c:a", "aac", "-b:a", "192k", "-t", f"{d:.3f}", "-movflags", "+faststart",
-                 str(args.output)])
         else:
-            run(["ffmpeg", "-y", "-i", str(joined), "-c", "copy", "-t", f"{d:.3f}",
-                 "-movflags", "+faststart", str(args.output)])
+            fc = f"[0:v]{vf}[v];[0:a]anull[a]"
+        cmd += ["-filter_complex", fc, "-map", "[v]", "-map", "[a]",
+                "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k", "-t", f"{d:.3f}", "-movflags", "+faststart",
+                str(args.output)]
+        run(cmd)
     dur, _ = probe(args.output)
     print(f"Siap: {args.output} ({dur:.1f}s)")
 

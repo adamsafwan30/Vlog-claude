@@ -19,3 +19,9 @@ Skrip untuk menjana vlog berdurasi **2 minit** daripada folder video/gambar.
 Klip disusun ikut nama fail, masa dibahagi sama rata (video pendek guna panjang penuh),
 setiap klip ada fade masuk/keluar, gambar diberi kesan zoom perlahan, dan fail audio
 dalam folder dijadikan muzik latar secara automatik.
+
+Sentuhan kreatif:
+- Gred warna hangat gaya vlog (kontras, saturasi, vignette).
+- Latar kabur menggantikan jalur hitam bila nisbah aspek klip berbeza.
+- Tajuk pembuka + tarikh, dan teks penutup "Terima kasih kerana menonton!".
+  Ubah dengan `--title`, `--subtitle`, `--outro`, atau buang dengan `--no-text`.
