@@ -25,3 +25,17 @@ Sentuhan kreatif:
 - Latar kabur menggantikan jalur hitam bila nisbah aspek klip berbeza.
 - Tajuk pembuka + tarikh, dan teks penutup "Terima kasih kerana menonton!".
   Ubah dengan `--title`, `--subtitle`, `--outro`, atau buang dengan `--no-text`.
+
+## Suntingan profesional: `pro_edit.py`
+
+```bash
+pip install librosa
+python3 pro_edit.py footage -o east_coast_diaries.mp4
+```
+
+- Muzik "Winter Breeze" oleh Arulo (Mixkit Stock Music Free License), dimuat turun automatik.
+- Potongan klip jatuh tepat pada beat lagu, dan struktur video ikut lagu: intro → drop → breakdown → drop → penutup.
+- Slow-motion 60fps, speed ramp, zoom punch, dan Ken Burns.
+- Transition flash, whip blur, zoom dan slide, berserta SFX whoosh dan boom.
+- Letterbox 2.39:1, gred teal-orange, grain dan vignette.
+- Tipografi Montserrat dalam English.
