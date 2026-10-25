@@ -52,7 +52,7 @@ def fill(w, h):
             f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
 
 
-def render_clip(src, kind, length, w, h, out):
+def render_clip(src, kind, length, w, h, out, start=None):
     fade = f"fade=t=in:st=0:d={FADE},fade=t=out:st={length - FADE:.3f}:d={FADE}"
     scale = fill(w, h)
     if kind == "image":
@@ -66,7 +66,9 @@ def render_clip(src, kind, length, w, h, out):
              "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(out)])
         return
     duration, has_audio = probe(src)
-    start = max(0.0, (duration - length) / 2)
+    if start is None:
+        start = (duration - length) / 2
+    start = max(0.0, min(start, duration - length))
     cmd = ["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{length:.3f}", "-i", str(src)]
     if not has_audio:
         cmd += ["-f", "lavfi", "-t", f"{length:.3f}", "-i", "anullsrc=r=44100:cl=stereo"]
@@ -88,7 +90,7 @@ def find_font(bold=True):
         return None
 
 
-def text_layer(tmp, name, text, size, y, start, end, font):
+def text_layer(tmp, name, text, size, y, start, end, font, x="(w-text_w)/2"):
     """drawtext dengan fade masuk/keluar; teks ditulis ke fail supaya tak perlu escape."""
     textfile = tmp / f"{name}.txt"
     textfile.write_text(text)
@@ -96,7 +98,7 @@ def text_layer(tmp, name, text, size, y, start, end, font):
              f"if(lt(t,{end - 0.8}),1,if(lt(t,{end}),({end}-t)/0.8,0))))")
     font_opt = f"fontfile={font}:" if font else ""
     return (f"drawtext={font_opt}textfile={textfile}:fontsize={size}:fontcolor=white"
-            f":shadowcolor=black@0.6:shadowx=3:shadowy=3:x=(w-text_w)/2:y={y}:alpha='{alpha}'")
+            f":shadowcolor=black@0.6:shadowx=3:shadowy=3:x={x}:y={y}:alpha='{alpha}'")
 
 
 def allocate(media, total):
