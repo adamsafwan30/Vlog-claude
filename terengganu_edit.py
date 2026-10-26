@@ -30,6 +30,7 @@ GRADE = ("eq=contrast=1.12:saturation=1.38:brightness=0.025:gamma=1.02,"
          "colorbalance=rs=-0.03:bs=0.05:rh=0.07:gh=0.03:bh=-0.06,"
          "curves=master='0/0 0.25/0.21 0.75/0.8 1/1',unsharp=5:5:0.5")
 YELLOW, ORANGE = "0xFFD23F", "0xE8590C"
+NIGHT = "eq=gamma=1.35:brightness=0.03:saturation=1.1,hqdn3d=3:3:4:4"  # cerahkan shot malam
 
 # Edit lagu: [A1, C1) + [C2, END) = 180s. Dikira dengan librosa (beat 3, 181, 313).
 SONG_A1, SONG_C1, SONG_C2 = 3.158, 80.922, 139.598
@@ -105,8 +106,9 @@ def render_shot(idx, shot, frames, out):
     key, start, _, speed, motion, _, _ = shot
     src = idx[key]
     secs = frames / FPS
-    smooth = motion.endswith("+smooth")
-    motion = motion.replace("+smooth", "")
+    flags = motion.split("+")[1:]
+    motion = motion.split("+")[0]
+    smooth, night = "smooth" in flags, "night" in flags
     src_len = secs * speed
     start = max(0.0, min(start, duration(src) - src_len - 0.05))
     pre = f"setpts=(PTS-STARTPTS)/{speed}"
@@ -114,7 +116,7 @@ def render_shot(idx, shot, frames, out):
         pre = f"fps=60,minterpolate=fps={round(FPS / speed)}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,{pre}"
     cover = "scale=2400:1350:force_original_aspect_ratio=increase,crop=2400:1350,setsar=1"
     vf = (f"{pre},fps={FPS},{cover},tpad=stop_mode=clone:stop_duration=3,"
-          f"{zoompan(motion, frames)},{GRADE},format=yuv420p")
+          f"{zoompan(motion, frames)},{NIGHT + ',' if night else ''}{GRADE},format=yuv420p")
     if smooth:  # minterpolate pada 1080p sahaja (laju)
         vf = f"scale=1920:-2,{vf}"
     run(["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{src_len + 0.3:.3f}", "-i", str(src), "-vf", vf,
@@ -195,8 +197,8 @@ def main():
         for c, (beat, small, big) in enumerate(CAPTIONS):
             s = bt(beat) + 0.1
             layers += [
-                text(tmp, f"k{c}a", small, "Montserrat-Bold.ttf", 30, "110", "h-235", s, s + 3.4, 0.4, 20),
-                (text(tmp, f"k{c}b", big, "Anton-Regular.ttf", 92, "105", "h-200", s + 0.12, s + 3.4, 0.4, 30)
+                text(tmp, f"k{c}a", small, "Montserrat-Bold.ttf", 38, "110", "h-285", s, s + 3.4, 0.4, 20),
+                (text(tmp, f"k{c}b", big, "Anton-Regular.ttf", 140, "102", "h-245", s + 0.12, s + 3.4, 0.4, 30)
                  .replace("fontcolor=white", f"fontcolor={YELLOW}:borderw=4:bordercolor={ORANGE}")),
             ]
         end_t = bt(len(grid) - 24)
