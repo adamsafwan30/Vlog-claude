@@ -1,6 +1,6 @@
 # Vlog-claude
 
-`vlog_memori_tercipta.mp4` — 2:00 vertical vlog (1080x1920, 30fps), music: *Memori Tercipta* (Shila Amzah).
+`vlog_memori_tercipta.mp4` — 2:00 landscape vlog (1920x1080 16:9, 30fps), music: *Memori Tercipta* (Shila Amzah).
 
 Structure (synced to the song):
 | Time | Song | Footage |

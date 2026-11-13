@@ -14,9 +14,12 @@ for i,p in enumerate(P):
     else:
         inp=["-ss",f"{p['a']:.3f}","-t",f"{p['b']-p['a']+0.5:.3f}","-i",SRC[p["src"]]]
     cx=p["cx"]
-    vf=(f"setpts=(PTS-STARTPTS)/{speed:.6f},fps={FPS},"
-        f"crop=w='trunc(ih*9/16/2)*2':h=ih:x='max(0,min(iw-ow,{cx}*iw-ow/2))':y=0,"
-        f"scale=1080:1920:flags=lanczos,setsar=1,format=yuv420p,tpad=stop_mode=clone:stop_duration=1")
+    if p["src"] in ("c3","c4","c6"):   # portrait source -> 16:9 window, cx = vertical centre
+        crop=f"crop=w=iw:h='trunc(iw*9/16/2)*2':x=0:y='max(0,min(ih-oh,{cx}*ih-oh/2))',"
+    else:                               # landscape source -> full frame
+        crop=""
+    vf=(f"setpts=(PTS-STARTPTS)/{speed:.6f},fps={FPS},{crop}"
+        f"scale=1920:1080:flags=lanczos,setsar=1,format=yuv420p,tpad=stop_mode=clone:stop_duration=1")
     out=f"{OUT}/p{i:03d}.mp4"
     cmd=["ffmpeg","-v","error","-y",*inp,"-map","0:v:0","-vf",vf,"-frames:v",str(n),
          "-c:v","libx264","-preset","medium","-crf","16","-r",str(FPS),"-an",out]

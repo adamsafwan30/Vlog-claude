@@ -18,7 +18,7 @@ SRC = {
     "c6": f"{V}/dji_mimo_20261111_161816_0041_1794386258981_video.mp4",
 }
 KF = {"c1": f"{S}/mezz/kf1.mp4", "c2": f"{S}/mezz/kf2.mp4"}
-OUT = f"{S}/segs"
+OUT = f"{S}/segs169"
 FPS = 30
 os.makedirs(OUT, exist_ok=True)
 
@@ -106,14 +106,14 @@ shot("c2", 215, 372, 76.5, 82.6, 0.55, ramp_out_end=True)
 rt("c2", 421.5, 82.6, 87.1, 0.50)          # after shift: food arrives at the table
 
 # FINAL CHORUS : together at the table, then goodbye wave
-rt("c4", 0.3, 87.1, 91.0, 0.5)             # whole team seated
+rt("c4", 0.3, 87.1, 91.0, 0.50)             # whole team seated
 rt("c4", 4.3, 91.0, 94.1, 0.5)             # smiles
-rt("c3", 0.0, 94.1, 97.4, 0.5)             # trays of food
+rt("c3", 0.0, 94.1, 97.4, 0.58)             # trays of food
 rt("c3", 3.4, 97.4, 101.0, 0.5)            # top-down food
-rt("c4", 7.6, 101.0, 105.0, 0.5)           # drinks raised
+rt("c4", 7.6, 101.0, 105.0, 0.38)           # drinks raised
 rt("c5", 3.4, 105.0, 109.2, 0.42)          # sip, chatting
 rt("c5", 9.0, 109.2, 113.5, 0.52)          # the team together
-add("c6", 0.98, 4.37, 4.37 - 0.98, 0.5)    # selfie walk + wave (ends ~116.9)
+add("c6", 0.98, 4.37, 4.37 - 0.98, 0.48)    # selfie walk + wave (ends ~116.9)
 
 total = sum(p["dur"] for p in pieces)
 print(f"pieces={len(pieces)} total={total:.2f}", file=sys.stderr)
